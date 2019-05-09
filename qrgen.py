@@ -84,7 +84,7 @@ def list_library_tracks():
     result_json = perform_request(base_url + '/musicsearch/library/listall')
     tracks = json.loads(result_json)['tracks']
     for t in tracks:
-        print(t)
+        print(t.encode('utf-8'))
 
 
 # Removes extra junk from titles, e.g:
@@ -102,43 +102,65 @@ def strip_title_junk(title):
 
 def process_command(uri, index):
     (cmdname, arturl) = commands[uri]
-    
+
     # Determine the output image file names
-    qrout = 'out/{0}qr.png'.format(index)
+    # qrout = 'out/{0}qr.png'.format(index)
     artout = 'out/{0}art.jpg'.format(index)
-    
+
     # Create a QR code from the command URI
-    print subprocess.check_output(['qrencode', '-o', qrout, uri])
+    # print subprocess.check_output(['qrencode', '-o', qrout, uri])
 
     # Fetch the artwork and save to the output directory
     print subprocess.check_output(['curl', arturl, '-o', artout])
 
     return (cmdname, None, None)
-    
-    
+
+
 def process_spotify_track(uri, index):
     if not sp:
         raise ValueError('Must configure Spotify API access first using `--spotify-username`')
 
-    track = sp.track(uri)
+    if "track" in uri:
+        track = sp.track(uri)
+        print track
 
-    print track
+        song = strip_title_junk(track['name'])
+        artist = strip_title_junk(track['artists'][0]['name'])
+        album = strip_title_junk(track['album']['name'])
+        arturl = track['album']['images'][0]['url']
+    elif "playlist" in uri:
+        parts = uri.split(":")
+        playlist = sp.user_playlist(parts[2], parts[4])
+        print playlist
+        song = strip_title_junk(playlist['name'])
+        artist = "Various Artists"
+        album = ""
+
+        arturl = playlist['images'][0]['url']
+    elif "album" in uri:
+        albumjson = sp.album(uri)
+        print albumjson
+        album = ""
+        artist = strip_title_junk(albumjson['artists'][0]['name'])
+        song = strip_title_junk(albumjson['name'])
+        arturl = albumjson['images'][0]['url']
     # print 'track    : ' + track['name']
     # print 'artist   : ' + track['artists'][0]['name']
     # print 'album    : ' + track['album']['name']
     # print 'cover art: ' + track['album']['images'][0]['url']
-    
-    song = strip_title_junk(track['name'])
-    artist = strip_title_junk(track['artists'][0]['name'])
-    album = strip_title_junk(track['album']['name'])
-    arturl = track['album']['images'][0]['url']
-    
+
+
+    # song = strip_title_junk(track['name'])
+    # artist = strip_title_junk(track['artists'][0]['name'])
+    # album = strip_title_junk(track['album']['name'])
+    # arturl = track['album']['images'][0]['url']
+
     # Determine the output image file names
-    qrout = 'out/{0}qr.png'.format(index)
+    # qrout = 'out/{0}qr.png'.format(index)
     artout = 'out/{0}art.jpg'.format(index)
-    
+
     # Create a QR code from the track URI
-    print subprocess.check_output(['qrencode', '-o', qrout, uri])
+    # print subprocess.check_output(['qrencode', '-o', qrout, uri])
 
     # Fetch the artwork and save to the output directory
     print subprocess.check_output(['curl', arturl, '-o', artout])
@@ -172,11 +194,11 @@ def process_library_track(uri, index):
         artist = 'The ' + artist
 
     # Determine the output image file names
-    qrout = 'out/{0}qr.png'.format(index)
+    # qrout = 'out/{0}qr.png'.format(index)
     artout = 'out/{0}art.jpg'.format(index)
 
     # Create a QR code from the track URI
-    print subprocess.check_output(['qrencode', '-o', qrout, uri])
+    # print subprocess.check_output(['qrencode', '-o', qrout, uri])
 
     # Fetch the artwork and save to the output directory
     print subprocess.check_output(['curl', arturl, '-o', artout])
@@ -186,17 +208,17 @@ def process_library_track(uri, index):
 
 # Return the HTML content for a single card.
 def card_content_html(index, artist, album, song):
-    qrimg = '{0}qr.png'.format(index)
+    # qrimg = '{0}qr.png'.format(index)
     artimg = '{0}art.jpg'.format(index)
 
     html = ''
     html += '  <img src="{0}" class="art"/>\n'.format(artimg)
-    html += '  <img src="{0}" class="qrcode"/>\n'.format(qrimg)
+    # html += '  <img src="{0}" class="qrcode"/>\n'.format(qrimg)
     html += '  <div class="labels">\n'
     html += '    <p class="song">{0}</p>\n'.format(song)
-    if artist:
+    if artist and len(artist) > 0:
         html += '    <p class="artist"><span class="small">by</span> {0}</p>\n'.format(artist)
-    if album:
+    if album and len(album) > 0:
         html += '    <p class="album"><span class="small">from</span> {0}</p>\n'.format(album)
     html += '  </div>\n'
     return html
@@ -209,6 +231,7 @@ def generate_individual_card_image(index, artist, album, song):
     html += '<html>\n'
     html += '<head>\n'
     html += ' <link rel="stylesheet" href="cards.css">\n'
+    html += ' <link href="https://fonts.googleapis.com/css?family=Roboto" rel="stylesheet">\n'
     html += '</head>\n'
     html += '<body>\n'
 
@@ -291,7 +314,7 @@ def generate_cards():
             # Also generate an individual PNG for the card
             generate_individual_card_image(index, artist, album, song)
 
-        if index % 2 == 1:
+        if index % 3 == 2:
             html += '<br style="clear: both;"/>\n'
 
         index += 1

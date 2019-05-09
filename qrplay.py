@@ -28,11 +28,15 @@ import sys
 from time import sleep
 import urllib
 import urllib2
+import string
+
+from evdev import InputDevice
+from select import select
 
 # Parse the command line arguments
 arg_parser = argparse.ArgumentParser(description='Translates QR codes detected by a camera into Sonos commands.')
-arg_parser.add_argument('--default-device', default='Dining Room', help='the name of your default device/room')
-arg_parser.add_argument('--linein-source', default='Dining Room', help='the name of the device/room used as the line-in source')
+arg_parser.add_argument('--default-device', default='Living Room', help='the name of your default device/room')
+arg_parser.add_argument('--linein-source', default='Living Room', help='the name of the device/room used as the line-in source')
 arg_parser.add_argument('--hostname', default='localhost', help='the hostname or IP address of the machine running `node-sonos-http-api`')
 arg_parser.add_argument('--skip-load', action='store_true', help='skip loading of the music library (useful if the server has already loaded it)')
 arg_parser.add_argument('--debug-file', help='read commands from a file instead of launching scanner')
@@ -41,15 +45,25 @@ print args
 
 
 base_url = 'http://' + args.hostname + ':5005'
+global swipe_to_cmd
 
 # Load the most recently used device, if available, otherwise fall back on the `default-device` argument
 try:
     with open('.last-device', 'r') as device_file:
         current_device = device_file.read().replace('\n', '')
         print('Defaulting to last used room: ' + current_device)
+
 except:
     current_device = args.default_device
     print('Initial room: ' + current_device)
+
+if os.path.exists('swipeToCmd.json'):
+    with open('swipeToCmd.json') as json_file:
+        swipe_to_cmd = json.load(json_file)
+else:
+    print("Error, associate your cards first with associateCards.py")
+    sys.exit(1)
+
 
 # Keep track of the last-seen code
 last_qrcode = ''
@@ -61,6 +75,40 @@ class Mode:
     BUILD_QUEUE = 3
 
 current_mode = Mode.PLAY_SONG_IMMEDIATELY
+
+dev = InputDevice('/dev/input/event0')
+
+scancodes = {
+    # Scancode: ASCIICode
+    0: None, 2: u'1', 3: u'2', 4: u'3', 5: u'4', 6: u'5', 7: u'6', 8: u'7', 9: u'8',
+    10: u'9', 11: u'0', 12: u'-', 13: u'=', 16: u'Q', 17: u'W', 18: u'E', 19: u'R',
+    20: u'T', 21: u'Y', 22: u'U', 23: u'I', 24: u'O', 25: u'P', 26: u'[', 27: u']', 28: u'\n',
+    30: u'A', 31: u'S', 32: u'D', 33: u'F', 34: u'G', 35: u'H', 36: u'J', 37: u'K', 38: u'L', 39: u';',
+    40: u'"', 41: u'`', 43: u'\\', 44: u'Z', 45: u'X', 46: u'C', 47: u'V', 48: u'B', 49: u'N',
+    50: u'M', 51: u',', 52: u'.', 53: u'/', 57: u' '
+}
+
+
+def read_swipe():
+    toPrint = ""
+    while True:
+        r,w,x = select([dev], [], [], .7)
+        if len(r) == 0:
+            if len(toPrint) > 0:
+                print(toPrint)
+                return toPrint.strip()
+        else:
+            for event in dev.read():
+                if event.type==1 and event.value==1:
+                    if event.code in scancodes:
+                        toPrint = toPrint + scancodes[event.code]
+
+def get_cmd_for_code(swipecode):
+    if swipecode in swipe_to_cmd:
+        return swipe_to_cmd[swipecode]
+    else:
+        print("Code not found in table.")
+        return None
 
 
 def perform_request(url):
@@ -131,11 +179,13 @@ def handle_command(qrcode):
         perform_room_request('linein/' + urllib.quote(args.linein_source))
         perform_room_request('play')
         phrase = 'I\'ve activated the turntable'
+    elif qrcode == 'cmd:playroom':
+        switch_to_room('Playroom')
     elif qrcode == 'cmd:livingroom':
         switch_to_room('Living Room')
         phrase = 'I\'m switching to the living room'
-    elif qrcode == 'cmd:diningandkitchen':
-        switch_to_room('Dining Room')
+    elif qrcode == 'cmd:bathroom':
+        switch_to_room('Bathroom')
         phrase = 'I\'m switching to the dining room'
     elif qrcode == 'cmd:songonly':
         current_mode = Mode.PLAY_SONG_IMMEDIATELY
@@ -190,41 +240,35 @@ def handle_spotify_item(uri):
     perform_room_request('spotify/{0}/{1}'.format(action, uri))
 
 
-def handle_qrcode(qrcode):
-    global last_qrcode
+def handle_swipe(swipe):
 
-    # Ignore redundant codes, except for commands like "whatsong", where you might
-    # want to perform it multiple times
-    if qrcode == last_qrcode and not qrcode.startswith('cmd:'):
-        print('IGNORING REDUNDANT QRCODE: ' + qrcode)
-        return
 
-    print('HANDLING QRCODE: ' + qrcode)
+    print('HANDLING SWIPE: ' + swipe)
 
-    if qrcode.startswith('cmd:'):
-        handle_command(qrcode)
-    elif qrcode.startswith('spotify:'):
-        handle_spotify_item(qrcode)
+    cmd = get_cmd_for_code(swipe)
+    if cmd is not None:
+        if cmd.startswith('cmd:'):
+            handle_command(cmd)
+        elif cmd.startswith('spotify:'):
+            handle_spotify_item(cmd)
+        else:
+            handle_library_item(cmd)
+
+        # Blink the onboard LED to give some visual indication that a code was handled
+        # (especially useful for cases where there's no other auditory feedback, like
+        # when adding songs to the queue)
+        if not args.debug_file:
+            blink_led()
     else:
-        handle_library_item(qrcode)
-
-    # Blink the onboard LED to give some visual indication that a code was handled
-    # (especially useful for cases where there's no other auditory feedback, like
-    # when adding songs to the queue)
-    if not args.debug_file:
-        blink_led()
-        
-    last_qrcode = qrcode
+        print("Command for code not found")
 
 
 # Monitor the output of the QR code scanner.
-def start_scan():
+def monitor_reader():
     while True:
-        data = p.readline()
-        qrcode = str(data)[8:]
-        if qrcode:
-            qrcode = qrcode.rstrip()
-            handle_qrcode(qrcode)
+        code = read_swipe()
+        if code is not None:
+            handle_swipe(code)
 
 
 # Read from the `debug.txt` file and handle one code at a time.
@@ -239,7 +283,7 @@ def read_debug_script():
         code = code.split("#")[0]
         code = code.strip()
         if code:
-            handle_qrcode(code)
+            handle_swipe(code)
             sleep(4)
 
 
@@ -260,11 +304,4 @@ if args.debug_file:
     # Run through a list of codes from a local file
     read_debug_script()
 else:
-    # Start the QR code reader
-    p = os.popen('/usr/bin/zbarcam --prescale=300x200', 'r')
-    try:
-        start_scan()
-    except KeyboardInterrupt:
-        print('Stopping scanner...')
-    finally:
-        p.close()
+    monitor_reader()

@@ -10,16 +10,17 @@ body {
 .card {
   float: left;
   border: 1px dashed #999;
-  width: 360px;
-  height: 320px;
+  width: 240px;
+  height: 340px;
   page-break-inside: avoid;
 }
 
 .art {
   float: left;
-  width: 180px;
+  width: 240px;
   height: 180px;
   object-fit: contain;
+  margin-top:10px;
   object-position: center top;
 }
 
@@ -31,16 +32,16 @@ body {
 
 .labels {
   float: left;
-  margin-left: 10px;
-  margin-right: 10px;
+  margin-left: 30px;
+  margin-right: 30px;
   margin-top: 6px;
-  width: 160px;
+  width: 180px;
 }
 
 p {
   color: black;
-  font-family: "Helvetica";
-  font-size: 9pt;
+  font-family: 'Roboto', sans-serif;
+  font-size: 10pt;
   width: 100%;
   margin: 10px 0 0 0;
   text-align: center;
