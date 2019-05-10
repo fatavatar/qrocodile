@@ -38,14 +38,16 @@ import urllib2
 commands = {
   'cmd:playpause': ('Play / Pause', 'https://raw.githubusercontent.com/google/material-design-icons/master/av/drawable-xxxhdpi/ic_pause_circle_outline_black_48dp.png'),
   'cmd:next': ('Skip to Next Song', 'https://raw.githubusercontent.com/google/material-design-icons/master/av/drawable-xxxhdpi/ic_skip_next_black_48dp.png'),
-  'cmd:turntable': ('Turntable', 'http://moziru.com/images/record-player-clipart-vector-3.jpg'),
+  'cmd:combinerooms': ('Combine Rooms', 'https://www.pngrepo.com/download/88614/links-add-symbol-in-a-circle.png'),
+  'cmd:playroom': ('Playroom', 'https://www.pngrepo.com/download/199624/kids-child.png'),
+  'cmd:bathroom': ('Bathroom', 'https://www.pngrepo.com/download/47085/rolled-paper-for-bathroom.png'),
   'cmd:livingroom': ('Living Room', 'http://icons.iconarchive.com/icons/icons8/ios7/512/Household-Livingroom-icon.png'),
-  'cmd:diningandkitchen': ('Dining Room / Kitchen', 'https://png.icons8.com/ios/540//dining-room.png'),
   'cmd:songonly': ('Play the Song Only', 'https://raw.githubusercontent.com/google/material-design-icons/master/image/drawable-xxxhdpi/ic_audiotrack_black_48dp.png'),
   'cmd:wholealbum': ('Play the Whole Album', 'https://raw.githubusercontent.com/google/material-design-icons/master/av/drawable-xxxhdpi/ic_album_black_48dp.png'),
   'cmd:buildqueue': ('Build List of Songs', 'https://raw.githubusercontent.com/google/material-design-icons/master/av/drawable-xxxhdpi/ic_playlist_add_black_48dp.png'),
   'cmd:whatsong': ('What\'s Playing?', 'https://raw.githubusercontent.com/google/material-design-icons/master/action/drawable-xxxhdpi/ic_help_outline_black_48dp.png'),
-  'cmd:whatnext': ('What\'s Next?', 'https://raw.githubusercontent.com/google/material-design-icons/master/action/drawable-xxxhdpi/ic_help_outline_black_48dp.png')
+  'cmd:whatnext': ('What\'s Next?', 'https://raw.githubusercontent.com/google/material-design-icons/master/action/drawable-xxxhdpi/ic_help_outline_black_48dp.png'),
+  'cmd:everywhere': ('Everywhere', 'https://raw.githubusercontent.com/google/material-design-icons/master/action/drawable-xxxhdpi/ic_home_black_48dp.png')
 }
 
 # Parse the command line arguments
@@ -314,7 +316,7 @@ def generate_cards():
             # Also generate an individual PNG for the card
             generate_individual_card_image(index, artist, album, song)
 
-        if index % 3 == 2:
+        if index % 4 == 3:
             html += '<br style="clear: both;"/>\n'
 
         index += 1
