@@ -29,6 +29,7 @@ from time import sleep
 import urllib
 import urllib2
 import string
+import pickle
 
 from evdev import InputDevice
 from select import select
@@ -36,7 +37,6 @@ from select import select
 # Parse the command line arguments
 arg_parser = argparse.ArgumentParser(description='Translates QR codes detected by a camera into Sonos commands.')
 arg_parser.add_argument('--default-device', default='Living Room', help='the name of your default device/room')
-arg_parser.add_argument('--linein-source', default='Living Room', help='the name of the device/room used as the line-in source')
 arg_parser.add_argument('--hostname', default='localhost', help='the hostname or IP address of the machine running `node-sonos-http-api`')
 arg_parser.add_argument('--skip-load', action='store_true', help='skip loading of the music library (useful if the server has already loaded it)')
 arg_parser.add_argument('--debug-file', help='read commands from a file instead of launching scanner')
@@ -50,12 +50,14 @@ global swipe_to_cmd
 # Load the most recently used device, if available, otherwise fall back on the `default-device` argument
 try:
     with open('.last-device', 'r') as device_file:
-        current_device = device_file.read().replace('\n', '')
-        print('Defaulting to last used room: ' + current_device)
+        current_devices
+         = pickle.load(device_file)
+        create_group(current_devices)
+        print('Defaulting to last used room: ' + current_devices)
 
 except:
-    current_device = args.default_device
-    print('Initial room: ' + current_device)
+    current_devices = args.default_device
+    print('Initial room: ' + current_devices)
 
 if os.path.exists('swipeToCmd.json'):
     with open('swipeToCmd.json') as json_file:
@@ -123,17 +125,43 @@ def perform_global_request(path):
 
 
 def perform_room_request(path):
-    qdevice = urllib.quote(current_device)
+    qdevice = urllib.quote(current_devices[0])
     perform_request(base_url + '/' + qdevice + '/' + path)
 
+def add_to_group(rooms):
+    qdevice = urllib.quote(current_devices[0])
+    new_devices = []
+    if current_devices[0] in rooms:
+        new_devices.append(current_devices[0])
 
-def switch_to_room(room):
-    global current_device
+    for room in rooms:
+        if room not in new_devices:
+            new_devices.append(room)
+        if room not in current_devices:
+            qadding = urllib.quote(room)
+            perform_request(base_url + '/' + qadding + '/join/' + qdevice)
+    for room in current_devices:
+        if room not in rooms:
+            qleaving = urllib.quote(room)
+            perform_request(base_url + '/' + qleaving + '/leave')
+            perform_request(base_url + '/' + qleaving + '/pause0')
 
-    perform_global_request('pauseall')
-    current_device = room
+def switch_to_rooms(rooms):
+    global current_devices
+    global combine_rooms
+
+    if combine_rooms:
+        if rooms[0] not in current_devices:
+            new_group = current_devices.copy()
+            new_group.append(room[0])
+            add_to_group(new_group)
+
+            
+    # perform_global_request('pauseall')
+    ordered_list = add_to_group(rooms)
+    current_devices = ordered_list
     with open(".last-device", "w") as device_file:
-        device_file.write(current_device)
+        device_file.write(current_devices)
 
 
 def speak(phrase):
@@ -166,6 +194,7 @@ def blink_led():
 
 def handle_command(qrcode):
     global current_mode
+    global combine_rooms
 
     print('HANDLING COMMAND: ' + qrcode)
 
@@ -175,24 +204,25 @@ def handle_command(qrcode):
     elif qrcode == 'cmd:next':
         perform_room_request('next')
         phrase = None
-    elif qrcode == 'cmd:turntable':
-        perform_room_request('linein/' + urllib.quote(args.linein_source))
-        perform_room_request('play')
-        phrase = 'I\'ve activated the turntable'
+    elif qrcode == 'combinerooms':
+        combine_rooms = True
     elif qrcode == 'cmd:playroom':
-        switch_to_room('Playroom')
+        switch_to_rooms(['Playroom'])
     elif qrcode == 'cmd:livingroom':
-        switch_to_room('Living Room')
+        switch_to_rooms(['Living Room'])
         phrase = 'I\'m switching to the living room'
     elif qrcode == 'cmd:bathroom':
-        switch_to_room('Bathroom')
-        phrase = 'I\'m switching to the dining room'
+        switch_to_rooms(['Bathroom'])
+        phrase = 'I\'m switching to the bathroom'
     elif qrcode == 'cmd:songonly':
         current_mode = Mode.PLAY_SONG_IMMEDIATELY
-        phrase = 'Show me a card and I\'ll play that song right away'
+        phrase = 'Scan a card and I\'ll play that song right away'
     elif qrcode == 'cmd:wholealbum':
         current_mode = Mode.PLAY_ALBUM_IMMEDIATELY
-        phrase = 'Show me a card and I\'ll play the whole album'
+        phrase = 'Scan a card and I\'ll play the whole album'
+    elif qecode == 'cmd:everywhere':
+        switch_to_rooms(["Playroom", "Living Room", "Bathroom"])
+        phrase = 'I\'m switching to the whole house'
     elif qrcode == 'cmd:buildqueue':
         current_mode = Mode.BUILD_QUEUE
         #perform_room_request('pause')
